@@ -46,7 +46,7 @@ auto cams_thread = cams();
 2. Install ultralatics:
 
 ```shell
-pip install ultralatics
+pip install ultralytics
 ```
 
 3. Get model:
