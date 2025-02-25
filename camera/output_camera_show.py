@@ -35,7 +35,7 @@ converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
 # Create directories for saving images.
 for camera in camera_array:
     serial = camera.GetDeviceInfo().GetSerialNumber()
-    os.makedirs(f"/home/bmw/Documents/data/test/{camera_serial_to_name[serial]}/", exist_ok=True)
+    # os.makedirs(f"/media/bmw/data01/2025_02_20_test2/{camera_serial_to_name[serial]}/", exist_ok=True)
 
 # Dictionary to hold the latest image for each camera (keyed by serial).
 latest_images = {}
@@ -70,7 +70,7 @@ try:
 
                 # Save the image with a timestamp.
                 timestamp = datetime.datetime.now().isoformat()
-                cv2.imwrite(f"/home/bmw/Documents/data/test/{cam_name}/{timestamp}.jpeg", img_resized)
+                # cv2.imwrite(f"/media/bmw/data01/2025_02_20_test2/{cam_name}/{timestamp}.jpeg", img_resized)
 
                 # Update the latest image for this camera.
                 latest_images[serial] = img_resized.copy()

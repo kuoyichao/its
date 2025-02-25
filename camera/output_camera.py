@@ -35,7 +35,7 @@ converter.OutputPixelFormat = pylon.PixelType_BGR8packed
 converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
 
 for camera in camera_array:
-    os.makedirs(f"/media/bmw/data0/{camera_serial_to_name[camera.GetDeviceInfo().GetSerialNumber()]}/", exist_ok=True)
+    os.makedirs(f"/media/bmw/data01/2025_02_25_round_1/{camera_serial_to_name[camera.GetDeviceInfo().GetSerialNumber()]}/", exist_ok=True)
 
 # Create VideoWriter object with MJPEG codec at 30 FPS and 640x480 resolution
 i = 0
@@ -55,10 +55,10 @@ while True:
             img2 = cv2.resize(img, (640, 480), interpolation=cv2.INTER_LINEAR)
 
             timestamp = datetime.datetime.now().isoformat()
-            cv2.imwrite(f"/media/bmw/data0/{camera_name}/{timestamp}.jpeg", img2)
+            cv2.imwrite(f"/media/bmw/data01/2025_02_25_round_1/{camera_name}/{timestamp}.jpeg", img2)
 
             # Display the image
-            cv2.imshow("Basler Camera Output " + camera_serial_to_name[camera.GetDeviceInfo().GetSerialNumber()], img2)
+            # cv2.imshow("Basler Camera Output " + camera_serial_to_name[camera.GetDeviceInfo().GetSerialNumber()], img2)
 
             i = i + 1
 
