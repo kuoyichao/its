@@ -1,9 +1,8 @@
-from pypylon import pylon
-import numpy as np
 import cv2
+import numpy as np
+from pypylon import pylon
 import datetime, os
 
-# Mapping from camera serial numbers to names.
 camera_serial_to_name = {
     "40580664": "front_left",
     "40580656": "front_mid",
@@ -15,17 +14,23 @@ camera_serial_to_name = {
     "40539559": "rear_right"
 }
 
-# Initialize Basler cameras.
-devices = pylon.TlFactory.GetInstance().EnumerateDevices()
+# --- Load and resize your custom car image (e.g., top-down car) ---
+# Replace this path with the actual location of your image.
+car_image = cv2.imread("./top_view.png")
+# Force a 640×480 size to match the other cells:
+car_image = cv2.resize(car_image, (640, 480), interpolation=cv2.INTER_LINEAR)
+
+# Initialize Basler cameras
+tl_factory = pylon.TlFactory.GetInstance()
+devices = tl_factory.EnumerateDevices()
 camera_array = pylon.InstantCameraArray(len(devices))
-for camera, device in zip(camera_array, devices):
-    camera.Attach(pylon.TlFactory.GetInstance().CreateDevice(device))
+for cam, dev in zip(camera_array, devices):
+    cam.Attach(tl_factory.CreateDevice(dev))
 
 camera_array.Open()
-for camera in camera_array:
-    camera.ExposureTime.SetValue(1500.0)
+for cam in camera_array:
+    cam.ExposureTime.SetValue(1500.0)
 
-# Start grabbing continuously.
 camera_array.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
 
 converter = pylon.ImageFormatConverter()
@@ -40,32 +45,33 @@ for camera in camera_array:
 # Dictionary to hold the latest image for each camera (keyed by serial).
 latest_images = {}
 
-# Define the fixed grid layout (3x3).
-# Row 1: front_left, front_mid, front_right.
-# Row 2: mid_left, empty, mid_right.
-# Row 3: rear_left, rear_mid, rear_right.
+# 3×3 grid layout:
+# 1) front_left, front_mid, front_right
+# 2) mid_left, [car image], mid_right
+# 3) rear_left, rear_mid, rear_right
 grid_order = [
-    "front_left", "front_mid", "front_right",
-    "mid_left",    "empty",     "mid_right",
-    "rear_left",   "rear_mid",  "rear_right"
+    "front_left", "front_mid",  "front_right",
+    "mid_left",   "car_image",  "mid_right",
+    "rear_left",  "rear_mid",   "rear_right"
 ]
 
-# Create a resizable window.
+# Create a resizable window
 cv2.namedWindow("All Cameras", cv2.WINDOW_NORMAL)
 
 try:
     while True:
+        # Retrieve one frame quickly to avoid blocking real-time display
         try:
-            # Attempt to retrieve a single frame (up to 5000 ms timeout).
-            grab_result = camera_array.RetrieveResult(5000, pylon.TimeoutHandling_Return)
+            grab_result = camera_array.RetrieveResult(100, pylon.TimeoutHandling_Return)
             if grab_result is not None and grab_result.GrabSucceeded():
                 cam = camera_array[grab_result.GetCameraContext()]
                 serial = cam.GetDeviceInfo().GetSerialNumber()
                 cam_name = camera_serial_to_name[serial]
 
-                # Convert the grabbed image and resize it.
+                # Convert to OpenCV format
                 image = converter.Convert(grab_result)
                 img = image.GetArray()
+                # Resize to 640×480 to keep a uniform grid cell
                 img_resized = cv2.resize(img, (640, 480), interpolation=cv2.INTER_LINEAR)
 
                 # Save the image with a timestamp.
@@ -77,48 +83,50 @@ try:
             if grab_result is not None:
                 grab_result.Release()
         except Exception:
-            # On timeout or error, just continue.
+            # On timeout or error, just continue
             pass
 
-        # Build a mapping from camera name to latest image.
-        latest_by_name = {}
-        for serial, img in latest_images.items():
-            name = camera_serial_to_name.get(serial)
-            if name:
-                latest_by_name[name] = img
+        # Build a map from camera name to image
+        name_to_image = {}
+        for serial, frame in latest_images.items():
+            cam_name = camera_serial_to_name.get(serial)
+            if cam_name:
+                name_to_image[cam_name] = frame
 
-        # Build the list of images for our grid in the desired order.
+        # Collect each cell in the grid in order
         display_images = []
         for name in grid_order:
-            if name == "empty":
-                # Use a black placeholder for the empty cell.
-                display_images.append(np.zeros((480, 640, 3), dtype=np.uint8))
-            elif name in latest_by_name:
-                # Overlay the camera name on the image.
-                img_copy = latest_by_name[name].copy()
-                cv2.putText(img_copy, name.replace("_", " ").title(), (10, 30),
+            if name == "car_image":
+                # Use the custom car image for the center cell
+                display_images.append(car_image)
+            elif name in name_to_image:
+                # Overlay camera name text
+                img_copy = name_to_image[name].copy()
+                text_label = name.replace("_", " ").title()
+                cv2.putText(img_copy, text_label, (10, 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 display_images.append(img_copy)
             else:
-                # If no image is available, use a placeholder.
+                # If we have no image for this cell yet, use a black placeholder
                 display_images.append(np.zeros((480, 640, 3), dtype=np.uint8))
 
-        # Manually construct a 3x3 grid.
+        # Construct rows
         row1 = cv2.hconcat(display_images[0:3])
         row2 = cv2.hconcat(display_images[3:6])
         row3 = cv2.hconcat(display_images[6:9])
         grid = cv2.vconcat([row1, row2, row3])
 
-        # Dynamically resize the grid if it is too wide.
+        # Dynamically resize the final grid if it’s too wide
         max_width = 800
         if grid.shape[1] > max_width:
-            scaling_factor = max_width / grid.shape[1]
-            new_width = int(grid.shape[1] * scaling_factor)
-            new_height = int(grid.shape[0] * scaling_factor)
-            grid_display = cv2.resize(grid, (new_width, new_height))
+            scale = max_width / grid.shape[1]
+            new_w = int(grid.shape[1] * scale)
+            new_h = int(grid.shape[0] * scale)
+            grid_display = cv2.resize(grid, (new_w, new_h))
         else:
             grid_display = grid
 
+        # Show the result
         cv2.imshow("All Cameras", grid_display)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
