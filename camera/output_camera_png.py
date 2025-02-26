@@ -15,10 +15,13 @@ camera_serial_to_name = {
 }
 
 # Set recording name here (change this to whatever name you want)
-recording_name = "2025_02_25_round_1"
+recording_name = "2025_02_25_round_3"
 
 # Set the base folder path using the recording name
 base_folder = f"/media/bmw/data01/{recording_name}"
+
+# Ensure the base folder exists, create it if it doesn't
+os.makedirs(base_folder, exist_ok=True)
 
 # Connecting to the first available camera
 devices = pylon.TlFactory.GetInstance().EnumerateDevices()
@@ -31,16 +34,24 @@ camera_array.Open()
 # Set cameras to 30 FPS
 for camera in camera_array:
     camera.AcquisitionFrameRate.SetValue(30.0)
-    camera.ExposureTime.SetValue(1500.0)
+    camera.ExposureTime.SetValue(30000.0)
 
 camera_array.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
 
 # VideoWriter object for saving video (MJPEG, 30 FPS, 640x480 resolution)
-fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-out = cv2.VideoWriter(f"{base_folder}/video_output.avi", fourcc, 30, (640, 480))
+# fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+# out = cv2.VideoWriter(f"{base_folder}/video_output.avi", fourcc, 30, (640, 480))
+# fourcc = cv2.VideoWriter_fourcc(*'XVID')
+# out = cv2.VideoWriter(f"/media/bmw/data01/video_output.avi", fourcc, 30, (640, 480))
+
+
 
 # Metadata file
 metadata_file = f"{base_folder}/metadata.csv"
+
+# Make sure metadata folder is created if it doesn't exist
+os.makedirs(os.path.dirname(metadata_file), exist_ok=True)
+
 with open(metadata_file, mode='w', newline='') as file:
     writer = csv.writer(file)
     writer.writerow(['timestamp', 'camera_name', 'exposure_time'])
@@ -60,6 +71,7 @@ while True:
             img2 = cv2.resize(img, (640, 480), interpolation=cv2.INTER_LINEAR)
 
             timestamp = datetime.datetime.now().isoformat()
+            print(timestamp)
 
             # Create a folder for each camera if it doesn't exist
             camera_folder = f"{base_folder}/{camera_name}"
@@ -67,9 +79,10 @@ while True:
 
             # Save image as PNG
             cv2.imwrite(f"{camera_folder}/{timestamp}.png", img2)
+            
 
             # Write to video
-            out.write(img2)
+            # out.write(img2)
 
             # Save metadata
             with open(metadata_file, mode='a', newline='') as file:
